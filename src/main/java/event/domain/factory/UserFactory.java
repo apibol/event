@@ -1,7 +1,7 @@
 package event.domain.factory;
 
+import domain.Participant;
 import domain.SystemUser;
-import event.domain.User;
 
 /**
  * User factory
@@ -10,18 +10,14 @@ import event.domain.User;
  */
 public class UserFactory {
 
-    /**
+  /**
      * Convert User from system user
      *
      * @param systemUser
      * @return
      */
-    public static User fromSystemUser(SystemUser systemUser){
-        User user = new User();
-        user.setNickname(systemUser.getNickname());
-        user.setEmail(systemUser.getEmail());
-        user.setId(systemUser.getId());
-        return user;
+    public static Participant fromSystemUser(SystemUser systemUser){
+        return Participant.builder().id(systemUser.getId()).nickname(systemUser.getNickname()).email(systemUser.getEmail()).build();
     }
 
 }

@@ -1,10 +1,12 @@
 package event.domain.service;
 
 import com.google.common.collect.Lists;
+import com.google.common.reflect.Parameter;
+
+import domain.Participant;
 import domain.SystemUser;
 import event.domain.Event;
 import event.domain.Game;
-import event.domain.User;
 import event.domain.exception.NoEventsFound;
 import event.domain.factory.UserFactory;
 import event.domain.repository.EventRepository;
@@ -20,14 +22,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
-import java.time.LocalDateTime;
-import java.time.Period;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static java.time.temporal.ChronoUnit.HOURS;
 
 /**
  * The event service
@@ -67,7 +64,7 @@ public class EventService {
      */
     public Event create(final EventDTO eventDTO, String nickname) {
         SystemUser systemUser = this.systemUserService.loggerUserInfo(nickname);
-        User userInfo = UserFactory.fromSystemUser(systemUser);
+        Participant userInfo = UserFactory.fromSystemUser(systemUser);
         Event newEvent = eventDTO.toDomain(userInfo);
         if (new IsPrivateEvent().isSatisfiedBy(eventDTO)) {
             fillUserInfo(newEvent, eventDTO.getParticipants());
@@ -157,7 +154,7 @@ public class EventService {
      */
     private Event fillUserInfo(final Event event, final Set<String> participants) {
         participants.forEach(participantId -> {
-            User participantInfo = this.userInfoService.getUserInfo(participantId);
+            Participant participantInfo = this.userInfoService.getUserInfo(participantId);
             event.addParticipant(participantInfo);
         });
         return event;
@@ -184,7 +181,7 @@ public class EventService {
     public List<Event> myEvents(String nickname){
         List<Event> events = Lists.newArrayList();
         SystemUser systemUser = this.systemUserService.loggerUserInfo(nickname);
-        User userInfo = UserFactory.fromSystemUser(systemUser);
+        Participant userInfo = UserFactory.fromSystemUser(systemUser);
         final List<Event> myEvents = events.stream().filter(ev -> EventIsOpenByTimeRange.createWithNow().isSatisfiedBy(ev) &&
                 new EventIsAllowedToUser(userInfo.getId()).isSatisfiedBy(ev)).collect(Collectors.toList());
         if(CollectionUtils.isEmpty(myEvents)){

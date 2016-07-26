@@ -1,18 +1,20 @@
 package event.domain;
 
-import event.domain.exception.GameIsNotInEventRangeDate;
-import event.domain.specification.IsInEventPeriod;
-import io.swagger.models.auth.In;
-import lombok.Data;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static java.time.temporal.ChronoUnit.HOURS;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
-import static java.time.temporal.ChronoUnit.HOURS;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+import domain.Participant;
+import event.domain.exception.GameIsNotInEventRangeDate;
+import event.domain.specification.IsInEventPeriod;
+import lombok.Data;
 
 /**
  * @author Claudio E. de Oliveira on 27/02/16.
@@ -37,14 +39,14 @@ public class Event {
 
     private Set<Game> games = new HashSet<>();
 
-    private Set<User> participants = new HashSet<>();
+    private Set<Participant> participants = new HashSet<>();
 
     /**
      * Hours before game to accept new predictions
      */
     private Integer hoursLimitToBlock = DEFAULT_HOURS;
 
-    private User owner;
+    private Participant owner;
 
     /**
      * Default constructor for frameworks
@@ -61,7 +63,7 @@ public class Event {
      * @param open
      * @param owner
      */
-    private Event(String id, String name, Period period, Boolean open, User owner, Integer hoursLimitToBlock) {
+    private Event(String id, String name, Period period, Boolean open, Participant owner, Integer hoursLimitToBlock) {
         this.id = id;
         this.name = name;
         this.period = period;
@@ -81,7 +83,7 @@ public class Event {
      * @param hoursLimitToBlock
      * @return
      */
-    public static Event newEvent(String id, String name, Period period, Boolean open, User owner, Integer hoursLimitToBlock) {
+    public static Event newEvent(String id, String name, Period period, Boolean open, Participant owner, Integer hoursLimitToBlock) {
         return new Event(id, name, period, open, owner, hoursLimitToBlock);
     }
 
@@ -124,11 +126,11 @@ public class Event {
     /**
      * Add participant in event
      *
-     * @param user
+     * @param Participant
      * @return
      */
-    public Event addParticipant(User user) {
-        this.participants.add(user);
+    public Event addParticipant(Participant Participant) {
+        this.participants.add(Participant);
         return this;
     }
 
@@ -143,7 +145,7 @@ public class Event {
         if (Objects.nonNull(game)) {
             final LocalDateTime requestTime = LocalDateTime.now();
             final LocalDateTime gameTime = game.getTime();
-            final long hours = HOURS.between(gameTime, requestTime);
+            final long hours = HOURS.between(requestTime,gameTime);
             return (int) hours > this.hoursLimitToBlock;
         }
         return Boolean.FALSE;
@@ -155,16 +157,17 @@ public class Event {
      * @return
      */
     public Boolean isOpen(LocalDateTime requestTime) {
-        return this.period.start().isBefore(requestTime) && this.period.end().isBefore(requestTime);
+        checkNotNull(requestTime, "request time cannot be null");
+        return requestTime.isAfter(this.period.start()) && requestTime.isBefore(this.period.end());
     }
 
     /**
-     * Its defines if user is participant
+     * Its defines if Participant is participant
      *
      * @return
      */
-    public Boolean isParticipant(String userId) {
-        return this.participants.stream().anyMatch(part -> part.getId().equals(userId));
+    public Boolean isParticipant(String ParticipantId) {
+        return this.participants.stream().anyMatch(part -> part.getId().equals(ParticipantId));
     }
 
 }
