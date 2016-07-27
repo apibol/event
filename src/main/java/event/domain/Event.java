@@ -6,6 +6,7 @@ import static java.time.temporal.ChronoUnit.HOURS;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.data.annotation.Id;
@@ -13,6 +14,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import domain.Participant;
 import event.domain.exception.GameIsNotInEventRangeDate;
+import event.domain.exception.GameNotFound;
 import event.domain.specification.IsInEventPeriod;
 import lombok.Data;
 
@@ -23,151 +25,157 @@ import lombok.Data;
 @Document(collection = "event")
 public class Event {
 
-    /**
-     * Default time to block
-     */
-    private static final Integer DEFAULT_HOURS = 2;
+  /**
+   * Default time to block
+   */
+  private static final Integer DEFAULT_HOURS = 2;
 
-    @Id
-    private String id;
+  @Id
+  private String id;
 
-    private String name;
+  private String name;
 
-    private Period period;
+  private Period period;
 
-    private Boolean open = Boolean.FALSE;
+  private Boolean open = Boolean.FALSE;
 
-    private Set<Game> games = new HashSet<>();
+  private Set<Game> games = new HashSet<>();
 
-    private Set<Participant> participants = new HashSet<>();
+  private Set<Participant> participants = new HashSet<>();
 
-    /**
-     * Hours before game to accept new predictions
-     */
-    private Integer hoursLimitToBlock = DEFAULT_HOURS;
+  /**
+   * Hours before game to accept new predictions
+   */
+  private Integer hoursLimitToBlock = DEFAULT_HOURS;
 
-    private Participant owner;
+  private Participant owner;
 
-    /**
-     * Default constructor for frameworks
-     */
-    Event() {
+  /**
+   * Default constructor for frameworks
+   */
+  Event() {}
+
+  /**
+   * Private constructor for factory
+   *
+   * @param id
+   * @param name
+   * @param period
+   * @param open
+   * @param owner
+   */
+  private Event(String id, String name, Period period, Boolean open, Participant owner, Integer hoursLimitToBlock) {
+    this.id = id;
+    this.name = name;
+    this.period = period;
+    this.open = open;
+    this.owner = owner;
+    this.hoursLimitToBlock = hoursLimitToBlock;
+    this.addParticipant(owner);
+  }
+
+  /**
+   * Factory method
+   *
+   * @param id
+   * @param name
+   * @param period
+   * @param open
+   * @param owner
+   * @param hoursLimitToBlock
+   * @return
+   */
+  public static Event newEvent(String id, String name, Period period, Boolean open, Participant owner,
+      Integer hoursLimitToBlock) {
+    return new Event(id, name, period, open, owner, hoursLimitToBlock);
+  }
+
+  /**
+   * Add game in event
+   *
+   * @param game
+   * @return
+   */
+  public Event addGame(Game game) throws GameIsNotInEventRangeDate {
+    if (new IsInEventPeriod(this).isSatisfiedBy(game)) {
+      this.games.add(game);
+      return this;
+    } else {
+      throw new GameIsNotInEventRangeDate(game);
     }
+  }
 
-    /**
-     * Private constructor for factory
-     *
-     * @param id
-     * @param name
-     * @param period
-     * @param open
-     * @param owner
-     */
-    private Event(String id, String name, Period period, Boolean open, Participant owner, Integer hoursLimitToBlock) {
-        this.id = id;
-        this.name = name;
-        this.period = period;
-        this.open = open;
-        this.owner = owner;
-        this.hoursLimitToBlock = hoursLimitToBlock;
-    }
+  /**
+   * Remove game from event
+   *
+   * @param gameId
+   * @return
+   */
+  public Event removeGame(String gameId) {
+    this.games.removeIf(element -> element.id.equals(gameId));
+    return this;
+  }
 
-    /**
-     * Factory method
-     *
-     * @param id
-     * @param name
-     * @param period
-     * @param open
-     * @param owner
-     * @param hoursLimitToBlock
-     * @return
-     */
-    public static Event newEvent(String id, String name, Period period, Boolean open, Participant owner, Integer hoursLimitToBlock) {
-        return new Event(id, name, period, open, owner, hoursLimitToBlock);
+  /**
+   * Select game by Id
+   *
+   * @param gameId - the requested game
+   * 
+   * @return - the game
+   */
+  public Game gameById(String gameId) {
+    final Optional<Game> optional = this.games.stream().filter(game -> game.getId().equals(gameId)).findFirst();
+    if (optional.isPresent()) {
+      return optional.get();
     }
+    throw new GameNotFound(gameId);
+  }
 
-    /**
-     * Add game in event
-     *
-     * @param game
-     * @return
-     */
-    public Event addGame(Game game) throws GameIsNotInEventRangeDate {
-        if (new IsInEventPeriod(this).isSatisfiedBy(game)) {
-            this.games.add(game);
-        } else {
-            throw new GameIsNotInEventRangeDate(game);
-        }
-        return this;
-    }
+  /**
+   * Add participant in event
+   *
+   * @param Participant
+   * @return
+   */
+  public Event addParticipant(Participant Participant) {
+    this.participants.add(Participant);
+    return this;
+  }
 
-    /**
-     * Remove game from event
-     *
-     * @param gameId
-     * @return
-     */
-    public Event removeGame(String gameId) {
-        this.games.removeIf(element -> element.id.equals(gameId));
-        return this;
+  /**
+   * Its defines if game is opened to receive predictions
+   *
+   * @param gameId
+   * @return
+   */
+  public Boolean isOpenForPredictions(String gameId) {
+    final Game game = this.gameById(gameId);
+    if (Objects.nonNull(game)) {
+      final LocalDateTime requestTime = LocalDateTime.now();
+      final LocalDateTime gameTime = game.getTime();
+      final long hours = HOURS.between(requestTime, gameTime);
+      return (int) hours > this.hoursLimitToBlock;
     }
+    return Boolean.FALSE;
+  }
 
-    /**
-     * Select game by Id
-     *
-     * @param gameId
-     * @return
-     */
-    public Game gameById(String gameId) {
-        return this.games.stream().filter(game -> game.getId().equals(gameId)).findFirst().get();
-    }
+  /**
+   * Its defines if event is opened to receive predictions
+   *
+   * @return
+   */
+  public Boolean isOpen(LocalDateTime requestTime) {
+    checkNotNull(requestTime, "request time cannot be null");
+    return requestTime.isAfter(this.period.start()) && requestTime.isBefore(this.period.end());
+  }
 
-    /**
-     * Add participant in event
-     *
-     * @param Participant
-     * @return
-     */
-    public Event addParticipant(Participant Participant) {
-        this.participants.add(Participant);
-        return this;
-    }
-
-    /**
-     * Its defines if game is opened to receive predictions
-     *
-     * @param gameId
-     * @return
-     */
-    public Boolean isOpenForPredictions(String gameId) {
-        final Game game = this.gameById(gameId);
-        if (Objects.nonNull(game)) {
-            final LocalDateTime requestTime = LocalDateTime.now();
-            final LocalDateTime gameTime = game.getTime();
-            final long hours = HOURS.between(requestTime,gameTime);
-            return (int) hours > this.hoursLimitToBlock;
-        }
-        return Boolean.FALSE;
-    }
-
-    /**
-     * Its defines if event is opened to receive predictions
-     *
-     * @return
-     */
-    public Boolean isOpen(LocalDateTime requestTime) {
-        checkNotNull(requestTime, "request time cannot be null");
-        return requestTime.isAfter(this.period.start()) && requestTime.isBefore(this.period.end());
-    }
-
-    /**
-     * Its defines if Participant is participant
-     *
-     * @return
-     */
-    public Boolean isParticipant(String ParticipantId) {
-        return this.participants.stream().anyMatch(part -> part.getId().equals(ParticipantId));
-    }
+  /**
+   * Its defines if Participant is participant
+   *
+   * @return
+   */
+  public Boolean isParticipant(String ParticipantId) {
+    return this.participants.stream().anyMatch(part -> part.getId().equals(ParticipantId));
+  }
 
 }
